@@ -1,0 +1,1202 @@
+package main;
+import java.awt.*;
+import java.awt.event.*;
+
+import javax.swing.*;
+
+import onehop.OneHop;
+import bruteforce.BruteForce;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.*;
+
+//import jdk.nashorn.internal.scripts.JO;
+import reduction.Reduction;
+import screens.*;
+import util.Reference;
+import util.SpanningTree;
+import util.Cost;
+import util.GeraMatriz;
+import util.MoreConnected;
+import graph.*;
+import grasp.*;
+import tsp.*;
+
+public class Principal extends JFrame {
+	//Constant
+	public static int INFINITY = Integer.MAX_VALUE;//2147483647; //Biggest integer value in Java
+	private int height = 400;
+	private int width = 400;
+	private int radiussensor = 8; //Radius of the circle representing the sensor node
+	private int radiusdrone = 8; //Radius of the circle representing the sensor node
+	
+	double precision=0;          //Distance between two drone positions in the grid --> informed by the user
+
+	
+	
+	private double datatime = 3;   //default values
+	private double speed = 2;
+	
+	
+	public static int radiorange = 60;
+	
+	static Vector <Node>sensors = new Vector<Node>();
+	public Vector <Node>dronepositions = new Vector<Node>();
+	Vector<Node> bestanswer = new Vector<Node>();                     //Useful to save the best answer found
+	
+	public double adjacency[][]; //Adjacency matrix with the links drone positions - nodes. The weights are based in number hops.
+	
+	static pnlImage image;    //Panel with the draw
+	JScrollPane jspImage;     //Scrool to this panel
+	
+	Handler events = new Handler();
+	JTextField jtfTolerancia, jtfResultado;
+	
+	JButton jbtGraph, jbtSpanningTree, jbtMoreConnected, jbtTeste, jbtExperimento1, jbtExperimento2, jbtExperimento3, jbtExperimento4, jbtExperimento5, jbtCreateSensors,jbtGenerate500x500;
+
+	
+	public Principal(){
+		getContentPane().setLayout(null);
+
+		createMenu();
+
+		//Cria o painel com a parte gráfica
+		image = new pnlImage(height,width,radiussensor,radiusdrone,radiorange);
+		image.setPreferredSize(new Dimension(width, height));
+		image.receiveSensors(sensors);
+		
+		//Criando o scroll
+		jspImage = new JScrollPane(image);
+		jspImage.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+		jspImage.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		//jspImage.
+		jspImage.setBounds(0, 0, width+18, 670);
+		
+		add(jspImage);
+
+		setResizable(true);
+		//setBounds(0,0,1200,800);
+
+		jbtGraph = new JButton("Draw Graph");
+		jbtGraph.addActionListener(events);
+		jbtGraph.setBounds(width+50, 30, 170, 30);
+		add(jbtGraph);
+		
+		jbtSpanningTree = new JButton("Draw Spanning Tree");
+		jbtSpanningTree.addActionListener(events);
+		jbtSpanningTree.setBounds(width+50, 80, 170, 30);
+		add(jbtSpanningTree);
+		
+		jbtMoreConnected = new JButton("More Connected");
+		jbtMoreConnected.addActionListener(events);
+		jbtMoreConnected.setBounds(width+50, 130, 170, 30);
+		add(jbtMoreConnected);
+		
+		
+		jbtTeste = new JButton("Teste");
+		jbtTeste.setBounds(width+50, 180, 170, 30);
+		jbtTeste.addActionListener(events);
+		add(jbtTeste);
+		
+		
+		jbtExperimento1 = new JButton("Experiment 1: varying data(200x200)");
+		jbtExperimento1.setBounds(width+50, 230, 270, 30);
+		jbtExperimento1.addActionListener(events);
+		add(jbtExperimento1);
+		
+		jbtExperimento2 = new JButton("Experiment 2-varying speed(200x200)");
+		jbtExperimento2.setBounds(width+50, 280, 270, 30);
+		jbtExperimento2.addActionListener(events);
+		add(jbtExperimento2);
+
+		jbtExperimento3 = new JButton("Experiment 3-number of nodes(400x400)");
+		jbtExperimento3.setBounds(width+50, 330, 270, 30);
+		jbtExperimento3.addActionListener(events);
+		add(jbtExperimento3);
+
+		
+		jbtExperimento4 = new JButton("Experiment 4-varying speed(400x400)");
+		jbtExperimento4.setBounds(width+50, 380, 270, 30);
+		jbtExperimento4.addActionListener(events);
+		add(jbtExperimento4);
+		
+		jbtExperimento5 = new JButton("Experiment 5-varying data(400x400)");
+		jbtExperimento5.setBounds(width+50, 430, 270, 30);
+		jbtExperimento5.addActionListener(events);
+		add(jbtExperimento5);
+		
+		jbtCreateSensors = new JButton("Create files with sensors");
+		jbtCreateSensors.setBounds(width+50, 480, 270, 30);
+		jbtCreateSensors.addActionListener(events);
+		add(jbtCreateSensors);
+		
+		jbtGenerate500x500 = new JButton("Create sensors 400x400");
+		jbtGenerate500x500.setBounds(width+50, 530, 270, 30);
+		jbtGenerate500x500.addActionListener(events);
+		add(jbtGenerate500x500);
+
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		setVisible(true);
+		setExtendedState(JFrame.MAXIMIZED_BOTH);
+		
+		generateDronePosition(84);/////DELETE THIS LINE
+	}
+	
+	int more=0;
+	public class Handler implements ActionListener{
+		public void actionPerformed(ActionEvent e) {
+			if(e.getSource()==jbtCreateSensors){
+				for(int i=0;i<35;i++){
+					
+					while(true){
+						generateSensors(30);
+						
+						if(SpanningTree.netDisconnected(adjacency, sensors.size(), dronepositions.size()))
+							continue;
+						//Verify if Position00 and center will find a result
+						Node zerozero = new Node(0,0,0);
+						Node center = new Node(0,width/2,height/2);
+						
+						boolean z = false;
+						for(int a=0;a<sensors.size();a++){
+							if(zerozero.distance(sensors.get(a))<=radiorange){
+								z=true;
+							}
+						}
+						if(!z) continue;
+						
+						boolean cen = false;
+						for(int a=0; a<sensors.size();a++){
+							if(center.distance(sensors.get(a))<=radiorange){
+								cen = true;
+							}
+						}
+						if(!cen) continue;
+						
+						if(performOneHop(datatime, speed))  //Return true when the number of drone position in the best route is smaller than 12
+							break;
+					}
+					System.out.println(""+1);
+					String filename = "C:\\Users\\rone\\Documents\\My Dropbox\\posdoutorado\\Pesquisa\\drone_wsn\\Experimentos\\cenarios_aux\\"+i+".txt";
+					savePoints(sensors, filename);
+				}
+			}
+
+			
+			if(e.getSource()==jbtExperimento4){
+				double datatime = 3;
+				double xvalue = 0.5;             //drone speed
+				generateDronePosition(84);
+				while(true){                                          //To control the axis X
+					System.out.print("\n==> "+xvalue);
+					//Repetition per point
+					for(int i=1;i<=35;i++){
+						//String rr = "C:\\Users\\rone\\Documents\\My Dropbox\\posdoutorado\\Pesquisa\\drone_wsn\\Experimentos\\cenario400x400\\150_"+i+".txt";
+						//JOptionPane.showMessageDialog(null, rr);
+
+						readSensores("C:\\Users\\rone\\Documents\\My Dropbox\\posdoutorado\\Pesquisa\\drone_wsn\\Experimentos\\cenario400x400\\150_"+i+".txt");
+						//boolean lixo = performSpanningTree(datatime,xvalue);
+						performCenter(datatime,xvalue,true);
+						performCenter(datatime,xvalue,false);
+						performIncremental(datatime,xvalue, "");
+						performDecremental(datatime,xvalue, "");
+						//performBruteForce(datatime,xvalue, "");
+						System.out.print("");
+					}
+					xvalue += 0.5;
+					if(xvalue >= 3.5) break;
+				}
+			}
+			
+			
+			if(e.getSource()==jbtGenerate500x500){
+
+				//generateDronePosition(84);
+				for(int num=100; num<=250;num+=50){
+					JOptionPane.showMessageDialog(null, ""+num);
+					int cont = 1;
+					while(true){
+						generateSensors(num);
+
+						image.receiveSensors(sensors);
+						image.repaint();
+
+						int selectedOption = JOptionPane.showConfirmDialog(null, num + " " + cont + "\nAceita a topologia?","Choose",JOptionPane.YES_NO_OPTION); 
+						if (selectedOption == JOptionPane.YES_OPTION) {
+							String filename = "C:\\Users\\rone\\Documents\\My Dropbox\\posdoutorado\\pesquisa\\drone_wsn\\experimentos\\cenario400x400\\"+num+"_"+cont+".txt";
+							
+							savePoints(sensors, filename);
+							cont++;
+						}
+						if(cont > 35) break;
+					}
+				}				
+			}			
+
+
+			if(e.getSource()==jbtExperimento3){
+				double datatime = 3;
+				double speed = 2;
+				double xvalue = 100;             //drone speed
+				generateDronePosition(84);
+				while(true){                                          //To control the axis X
+					System.out.print("\n==> "+xvalue);
+					//Repetition per point
+					for(int i=1;i<=35;i++){
+						//JOptionPane.showMessageDialog(null, "C:\\Users\\rone\\Documents\\My Dropbox\\posdoutorado\\Pesquisa\\drone_wsn\\Experimentos\\cenario400x400\\"+((int)xvalue)+"_"+i+".txt");
+						readSensores("C:\\Users\\rone\\Documents\\My Dropbox\\posdoutorado\\Pesquisa\\drone_wsn\\Experimentos\\cenario400x400\\"+((int)xvalue)+"_"+i+".txt");
+
+						//image.receiveSensors(sensors);
+						//image.repaint();
+
+						//JOptionPane.showMessageDialog(null, "veja");
+						
+						//boolean lixo = performSpanningTree(datatime,speed);
+						performCenter(datatime,speed,true);
+						performCenter(datatime,speed,false);
+						performIncremental(datatime,speed, "");
+						performDecremental(datatime,speed, "");
+						//performBruteForce(datatime,speed, "");
+						
+						//System.out.println(xvalue+" "+i);
+					}
+					xvalue += 50;
+					if(xvalue > 250) break;
+				}
+								
+			}
+
+
+			if(e.getSource()==jbtExperimento2){
+				double datatime = 3;
+				double xvalue = 3;             //drone speed
+				generateDronePosition(84);
+				while(true){                                          //To control the axis X
+					System.out.print("\n==> "+xvalue);
+					//Repetition per point
+					for(int i=0;i<35;i++){
+						//while(true){
+						//	generateSensors(30);
+						//	if(performSpanningTree(datasize, dronespeed))  //Return true when the number of drone position in the best route is smaller than 12
+						//		break;
+						//}
+						
+						readSensores("C:\\Users\\rone\\Documents\\My Dropbox\\posdoutorado\\Pesquisa\\drone_wsn\\Experimentos\\"+i+".txt");
+						
+						
+						
+						boolean lixo = performOneHop(datatime,xvalue);
+						performCenter(datatime,xvalue,true);
+						performCenter(datatime,xvalue,false);
+						performIncremental(datatime,xvalue, "");
+						performDecremental(datatime,xvalue, "");
+						performBruteForce(datatime,xvalue, "");
+						System.out.print("");
+					}
+					xvalue += 0.5;
+					if(xvalue >= 3.5) break;
+				}
+								
+			}
+
+			
+			
+
+			
+			
+			
+			if(e.getSource()==jbtExperimento5){
+				//double datasize = datatime;
+				double dronespeed = 2;
+				double xvalue = 1;             //Start point in X
+				generateDronePosition(84);
+				while(true){                                          //To control the axis X
+					System.out.print("\n==> "+xvalue);
+					//Repetition per point
+					for(int i=1;i<=35;i++){
+						
+						readSensores("C:\\Users\\rone\\Documents\\My Dropbox\\posdoutorado\\Pesquisa\\drone_wsn\\Experimentos\\cenario400x400\\150_"+i+".txt");
+						             //"C:\\Users\\rone\\Documents\\My Dropbox\\PosDoutorado\\Pesquisa\\drone_wsn\\Experimentos\\cenario400x400\\150_1.txt"
+						//boolean lixo = performSpanningTree(xvalue, dronespeed);
+						performCenter(xvalue, dronespeed,true);
+						performCenter(xvalue, dronespeed,false);
+						performIncremental(xvalue, dronespeed, "");
+						performDecremental(xvalue, dronespeed, "");
+						//performBruteForce(xvalue, dronespeed, "");
+						System.out.print("");
+					}
+					xvalue += 1;
+					if(xvalue > 6) break;
+				}
+								
+			}
+	
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			if(e.getSource()==jbtExperimento1){
+				//double datasize = datatime;
+				double dronespeed = speed;
+				double xvalue = 1;             //Start point in X
+				generateDronePosition(84);
+				while(true){                                          //To control the axis X
+					System.out.print("\n==> "+xvalue);
+					//Repetition per point
+					for(int i=0;i<35;i++){
+						//while(true){
+						//	generateSensors(30);
+						//	if(performSpanningTree(datasize, dronespeed))  //Return true when the number of drone position in the best route is smaller than 12
+						//		break;
+						//}
+						
+						readSensores("C:\\Users\\rone\\Documents\\My Dropbox\\posdoutorado\\Pesquisa\\drone_wsn\\Experimentos\\"+i+".txt");
+						
+						
+						
+						boolean lixo = performOneHop(xvalue, dronespeed);
+//						performCenter(xvalue, dronespeed,true);
+//						performCenter(xvalue, dronespeed,false);
+//						performIncremental(xvalue, dronespeed, "");
+//						performDecremental(xvalue, dronespeed, "");
+//						performBruteForce(xvalue, dronespeed, "");
+//						System.out.print("");
+					}
+					xvalue += 1;
+					if(xvalue > 6) break;
+				}
+								
+			}
+			if(e.getSource()==jbtTeste){
+				for(int num=25; num<=75;num+=25){
+					System.out.print("\n==> "+ num);
+					int cont = 1;
+					while(true){
+						generateSensors(num);
+						generateDronePosition(84);
+						SpanningTree m = new SpanningTree(radiorange, sensors, dronepositions,1);
+						int spanning_tree[][] = m.createSpanningTree();
+						
+						//m.show(spanning_tree);
+						
+						if(m.disconnected(spanning_tree))
+							continue;
+						else {
+							//String filename = "C:\\Users\\rone\\Documents\\My Dropbox\\PosDoutorado\\Pesquisa\\drone_wsn\\sensores\\"+num+"_"+cont+".txt";
+							String filename = "C:\\Users\\rone\\Documents\\Temporario\\sensores\\"+num+"_"+cont+".txt";
+							
+							savePoints(sensors, filename);
+							cont++;
+						}
+						//System.out.print("\n\n------Grid");
+						performDecremental(datatime,speed,"");
+						performIncremental(datatime,speed,"");
+						//performBruteForce();
+						
+						//dronepositions.clear();
+						//dronepositions = (Vector<Node>)sensors.clone();
+						//createAdjacencyMatrix();
+						
+						//System.out.print("\n------Node");
+						//performDecremental();
+						//performIncremental();
+						
+						if(cont > 35) break;
+					}
+				}				
+			}
+			if(e.getSource() == jmiReduce){
+				performDecremental(datatime,speed,"");
+			}
+			if(e.getSource()==jmiBruteForce){
+				//generateDronePosition();
+				//generateSensors();
+				performBruteForce(datatime,speed,"");
+				
+				/*
+				SpanningTree m = new SpanningTree(radiorange, sensors, dronepositions,1);
+				int spanning_tree[][] = m.createSpanningTree();
+				
+				m.show(spanning_tree);
+				
+				if(m.disconnected(spanning_tree))
+					JOptionPane.showMessageDialog(null, "desconectada");
+				else
+					JOptionPane.showMessageDialog(null, "conectada");
+					*/
+			}
+			if(e.getSource()==jmiGenerateSensors){
+				generateSensors();
+				image.receiveSensors(sensors);
+				image.repaint();
+
+			}
+			if(e.getSource()==jmiCreateDronesPosition){
+				generateDronePosition();
+			}
+			if(e.getSource()==jmiOneHop){
+/*				
+				SpanningTree m = new SpanningTree(radiorange, sensors, dronepositions,1);
+				int spanning_tree[][] = m.createSpanningTree();
+				image.receiveSpanningTree(spanning_tree);
+				JOptionPane.showMessageDialog(null, "Spanning tree");
+				
+				int st[][] = m.smallestEdges(adjacency);
+				image.receiveSpanningTree(st);
+				JOptionPane.showMessageDialog(null, "Novo");
+*/			
+				performOneHop(datatime, speed);
+				/*
+				while(true){
+					generateSensors(30);
+					if(performSpanningTree(datatime, speed))  //Return true when the number of drone position in the best route is smaller than 12
+						break;
+					//else
+					//	System.out.println("Tentou uma vez, mas a rota final estava muito grande");
+				}
+				*/
+				
+			}
+			if(e.getSource()==jmiCenter){
+				performCenter(datatime, speed, true);  //true = center of the monitored area
+			}
+			if(e.getSource()==jmi00){
+				performCenter(datatime, speed, false);  //false = position 0,0
+			}
+			if(e.getSource()==jmiReadSensors){
+				readSensores("");
+			}
+			if(e.getSource()==jmiReadDrones){
+				readDrones();
+			}
+			if(e.getSource() == jmiChangeBest){
+				//performLocalSearch(bestanswer);
+			}
+			if(e.getSource()==jmiMoreConnected){
+				performIncremental(datatime,speed,"");
+			}
+			if(e.getSource() ==jbtGraph){
+				image.showGraph();
+			}
+			if(e.getSource() == jbtSpanningTree){
+				image.showSpanningTree();
+			}
+			if(e.getSource() == jbtMoreConnected){
+				image.receiveMoreConnected(bestanswer,more);   
+				image.showMoreConnected();
+			}
+			if(e.getSource()==jmiSaveSensors){
+				savePoints(sensors);
+			}
+			if(e.getSource()==jmiReadDrones){
+				savePoints(dronepositions);
+			}
+		}
+	}
+
+	
+	public static void main(String[] args) {
+		new Principal();  
+	}
+	
+	JMenuBar jmbMenuBar;
+	JMenu jmnFile, jmnAlgorithms, jmnSensors, jmnDronePosition, jmnImprovements, jmnView, jmnAbout, jmnDefault;
+	JMenuItem jmiExit, jmiReadSensors, jmiSaveSensors, jmiReadDrones; 
+	JMenuItem jmiGenerateSensors, jmiOneHop, jmiMoreConnected, jmiReduce, jmiBruteForce, jmiCenter, jmi00;
+	JMenuItem jmiCreateDronesPosition;
+	JMenuItem jmiChangeBest;
+	JMenuItem jmiDefault;
+
+	public void createMenu(){
+		//MenuBar
+		jmbMenuBar = new JMenuBar();
+		
+		//Menu arquivo
+		jmnFile = new JMenu("File");
+		jmnFile.setMnemonic('f');
+		
+		jmiReadSensors = new JMenuItem("Read Sensors");
+		jmiReadSensors.setMnemonic('r');
+		jmiReadSensors.addActionListener(events);
+		
+		jmiSaveSensors = new JMenuItem("Save Sensors");
+		jmiSaveSensors.setMnemonic('s');
+		jmiSaveSensors.addActionListener(events);
+		
+		jmiReadDrones = new JMenuItem("Read Drone Position");
+		jmiReadDrones.setMnemonic('r');
+		jmiReadDrones.addActionListener(events);
+		
+		jmiExit = new JMenuItem("Exit");
+		jmiExit.setMnemonic('e');
+		jmiExit.addActionListener(events);
+		
+		jmnFile.add(jmiReadSensors);
+		jmnFile.add(jmiSaveSensors);
+		jmnFile.add(jmiReadDrones);
+		jmnFile.add(jmiExit);
+		
+		//menu Sensors
+		jmnSensors = new JMenu("Sensors");
+		jmnSensors.setMnemonic('s');
+		jmnSensors.addActionListener(events);
+		
+		jmiGenerateSensors = new JMenuItem("Generate Sensor Deployment");
+		jmiGenerateSensors.setMnemonic('c');
+		jmiGenerateSensors.addActionListener(events);
+		
+		jmnSensors.add(jmiGenerateSensors);
+		
+		//Menu Drone Positions
+		jmnDronePosition = new JMenu("Drone");
+		jmnDronePosition.setMnemonic('d');
+		
+		jmiCreateDronesPosition = new JMenuItem("Create drone positions");
+		jmiCreateDronesPosition.setMnemonic('p');
+		jmiCreateDronesPosition.addActionListener(events);
+		jmnDronePosition.add(jmiCreateDronesPosition);
+		
+		//MenuItems Algoritmos
+		jmnAlgorithms = new JMenu("Algorithms");
+		jmnAlgorithms.setMnemonic('a');
+		
+		jmiOneHop = new JMenuItem("One Hop");
+		jmiOneHop.setMnemonic('c');
+		jmiOneHop.addActionListener(events);
+		
+		jmiMoreConnected = new JMenuItem("Incremental");
+		jmiMoreConnected.setMnemonic('x');
+		jmiMoreConnected.addActionListener(events);
+		
+
+		jmiReduce = new JMenuItem("Decremental");
+		jmiReduce.addActionListener(events);
+		
+		jmiBruteForce = new JMenuItem("Brute Force");
+		jmiBruteForce.addActionListener(events);
+
+		jmiCenter = new JMenuItem("Node in the center");
+		jmiCenter.addActionListener(events);
+		
+		jmi00 = new JMenuItem("Node position 0,0");
+		jmi00.addActionListener(events);
+		
+		jmnAlgorithms.add(jmiOneHop);
+		jmnAlgorithms.add(jmiMoreConnected);
+		jmnAlgorithms.add(jmiReduce);
+		jmnAlgorithms.add(jmiBruteForce);
+		jmnAlgorithms.add(jmiCenter);
+		jmnAlgorithms.add(jmi00);
+		
+		//MenuItem Improvements
+		jmnImprovements = new JMenu("Improvements");
+		jmnImprovements.setMnemonic('i');
+		
+		jmiChangeBest = new JMenuItem("Local Search.");
+		jmiChangeBest.setMnemonic('c');
+		jmiChangeBest.addActionListener(events);
+		
+		jmnImprovements.add(jmiChangeBest);
+		
+		
+		//Menu Default
+		jmnDefault = new JMenu("Default");
+		jmnDefault.setMnemonic('d');
+		jmnDefault.addActionListener(events);
+		
+		jmiDefault = new JMenuItem("Default");
+		jmiDefault.setMnemonic('d');
+		jmiDefault.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_D, ActionEvent.CTRL_MASK));
+		jmiDefault.addActionListener(events);
+		jmnDefault.add(jmiDefault);
+
+		jmnAbout = new JMenu("About");
+		jmnAbout.setMnemonic('a');
+		jmnAbout.addActionListener(events);
+		
+		//Insere menus
+		jmbMenuBar.add(jmnFile);
+		jmbMenuBar.add(jmnSensors);
+		jmbMenuBar.add(jmnDronePosition);
+		jmbMenuBar.add(jmnAlgorithms);
+		jmbMenuBar.add(jmnImprovements);
+		jmbMenuBar.add(jmnAbout);
+		jmbMenuBar.add(jmnDefault);
+		
+		
+		//Inseri a bara de menu no formulário
+		setJMenuBar(jmbMenuBar);	
+	}
+	
+	//Create the adjacency matrix of drone positions and nodes, with weights based on number of hops.
+	public void createAdjacencyMatrix(){
+		if(sensors.size()>0 && dronepositions.size()>0){
+			Cursor cursor = Cursor.getPredefinedCursor( Cursor.WAIT_CURSOR );  
+			this.setCursor( cursor );  
+			SpanningTree m = new SpanningTree(radiorange, sensors, dronepositions,1);
+			adjacency = m.getMatrixWeight();  //get the matrix with connections drone-sensor. The weight based in hops
+			cursor = Cursor.getDefaultCursor();
+			this.setCursor(cursor);
+		}
+	}
+	
+	//Create integer adjacency matrix. The matrix adjacency is double
+	public int[][] intAdjacencyMatrix(){
+		int [][] adj = new int[adjacency.length][adjacency.length];
+		for(int l=0; l<adjacency.length; l++){
+			for(int c=0; c<adjacency.length; c++){
+				adj[l][c] = (int) adjacency[l][c];
+			}
+		}
+		return adj;
+	}
+	
+	public void generateSensors(){
+		generateSensors(-1);
+	}
+	public void generateSensors(int q){
+		int quant;
+		if(q==-1)
+			quant = Integer.parseInt(JOptionPane.showInputDialog("Informe o n�mero de sensores"));
+		else
+			quant = q;
+		sensors.clear();
+		int largura = width;
+		int altura = height;
+		for(int i=0;i<quant;i++){
+			int x = (int)(Math.random() * largura);
+			int y = (int)(Math.random() * altura);
+			sensors.add(new Node(i,x,y));
+		}
+		createAdjacencyMatrix();
+	}
+	
+	public void generateDronePosition(){
+		generateDronePosition(-1);
+	}
+	
+	public void generateDronePosition(double q){
+		dronepositions.clear();
+		if(q==-1)
+			precision = Integer.parseInt(JOptionPane.showInputDialog("Precision"));
+		else
+			precision = q;
+
+		double begin = (width - (precision * (((int)width/(int)precision))))/2;
+		//double begin = precision / 2;
+		
+		
+		dronepositions.add(new Node(0,0,0));  //a posi��o 0,0 est� sempre entre os pdps
+		int count=1;
+		for(double c = begin; c<width; c+=precision){
+			for(double l=begin; l<height; l+=precision){
+				dronepositions.add(new Node(count,c,l));
+				count++;
+			}
+		}
+		image.receiveDronePosition(dronepositions);
+		createAdjacencyMatrix();
+	}
+	
+	public void readSensores(String arq){
+	    String file="",ent="";
+		if(arq.equals("")){
+			JFileChooser chooser = new JFileChooser();
+		    int returnval = chooser.showOpenDialog(null);
+	
+		    if(returnval!=JFileChooser.CANCEL_OPTION)
+		        file = chooser.getSelectedFile().getAbsolutePath();
+		    else
+		    	return;
+		}
+		else{
+			file = arq;
+		}
+			
+		
+		sensors.clear();
+		try{
+			FileReader filereader = new FileReader(file);
+			BufferedReader read = new BufferedReader(filereader);
+			ent = read.readLine(); //Get just the first line
+			read.close();
+		}
+		catch(Exception e){
+			JOptionPane.showMessageDialog(null,"File not found!");
+		}
+		String x = "", y = "";
+		if (ent.charAt(0)=='#'){
+			//Retira o #
+			ent = ent.substring(1, ent.length());
+		}
+		//System.out.println(ent+"\n\n");
+		
+		int count = 0;
+		while(ent.length() > 0){
+			int virg = ent.indexOf(",");
+			x = ent.substring(0,virg);
+			ent = ent.substring(virg+1, ent.length());
+			virg = ent.indexOf(",");
+			if(virg >= 0 ){
+				y = ent.substring(0,virg);
+				ent = ent.substring(virg+1, ent.length());
+				sensors.add(new Node(count++,Double.parseDouble(x),Double.parseDouble(y)));
+				//System.out.println(x+","+y);
+				//System.out.println(x+","+y+"   ");
+			}
+			else {
+				sensors.add(new Node(count++,Double.parseDouble(x),Double.parseDouble(ent)));
+				//System.out.println(x+","+ent);
+				break;
+			}
+			
+		}
+		image.receiveSensors(sensors);
+		createAdjacencyMatrix();
+
+		//show(adjacency);
+
+	}
+
+	
+	///////////////////////
+	public void show(double ret[][]){
+        for(int l=sensors.size(); l<(dronepositions.size()+sensors.size());l++){
+        	if(l<sensors.size()) System.out.print(l+"\t");
+        	else System.out.print((l-sensors.size())+"\t");
+        	for(int c=0; c<(dronepositions.size()+sensors.size());c++){
+        		if(ret[l][c]==Principal.INFINITY)
+        			System.out.print("   # ");
+        		else if(ret[l][c]>999)
+        			System.out.print((int)ret[l][c] +" ");
+        		else if(ret[l][c]>99)
+        			System.out.print(" " +(int)ret[l][c] +" ");
+        		else if(ret[l][c]>9)
+        			System.out.print("  " +(int)ret[l][c] +" ");
+        		else 
+        			System.out.print("   " +(int)ret[l][c] +" ");
+        	}
+    		System.out.print("\n");
+        }
+ 
+        System.out.print("\n\t");
+        for(int i=0; i<dronepositions.size()+sensors.size();i++) {
+        	if(i==Principal.INFINITY)
+        		System.out.print("   " +'#' +" ");
+        	if(i>999)
+    			System.out.print(1 +" ");
+    		else if(i>99)
+    			System.out.print(" " +i +" ");
+    		else if(i>9)
+    			System.out.print("  " +i +" ");
+    		else 
+    			System.out.print("   " +i +" ");
+        }
+
+	}
+////////
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	public void readDrones(){
+		//String file="/home/rone/sensores_1000_3.txt", ent="";
+	    String file="",ent="";
+		JFileChooser chooser = new JFileChooser();
+	    int returnval = chooser.showOpenDialog(null);
+
+	    if(returnval!=JFileChooser.CANCEL_OPTION)
+	        file = chooser.getSelectedFile().getAbsolutePath();
+	    else
+	    	return;
+
+		dronepositions.clear();
+		try{
+			FileReader filereader = new FileReader(file);
+			BufferedReader read = new BufferedReader(filereader);
+			ent = read.readLine(); //Get just the first line
+			read.close();
+		}
+		catch(Exception e){
+			JOptionPane.showMessageDialog(null,"File not found!");
+		}
+		String x = "", y = "";
+		if (ent.charAt(0)=='#'){
+			//Retira o #
+			ent = ent.substring(1, ent.length());
+		}
+		//System.out.println(ent+"\n\n");
+		
+		int count = 0;
+		while(ent.length() > 0){
+			int virg = ent.indexOf(",");
+			x = ent.substring(0,virg);
+			ent = ent.substring(virg+1, ent.length());
+			virg = ent.indexOf(",");
+			if(virg >= 0 ){
+				y = ent.substring(0,virg);
+				ent = ent.substring(virg+1, ent.length());
+				dronepositions.add(new Node(count++,Double.parseDouble(x),Double.parseDouble(y)));
+				//System.out.println(x+","+y);
+				//System.out.println(x+","+y+"   ");
+			}
+			else {
+				dronepositions.add(new Node(count++,Double.parseDouble(x),Double.parseDouble(ent)));
+				//System.out.println(x+","+ent);
+				break;
+			}
+			
+		}
+		image.receiveDronePosition(dronepositions);
+		createAdjacencyMatrix();
+		
+
+	}
+
+	public void savePoints(Vector<Node> v){
+		savePoints(v,null);
+	}
+	
+	
+	public void savePoints(Vector<Node> v, String filename){
+		JFileChooser chooser = null;
+		int ret = JFileChooser.APPROVE_OPTION;
+		File file = null;
+		
+		if(filename == null){                             //Show dialog box to get the file name
+			chooser = new JFileChooser();
+			ret = chooser.showSaveDialog(null);
+			if (ret != JFileChooser.CANCEL_OPTION)
+				file = new File(chooser.getSelectedFile().getAbsolutePath());
+		}
+		else{                                           //Use the parameter file name
+			file = new File(filename);
+		}
+		
+		if (ret != JFileChooser.CANCEL_OPTION){
+			//File file = new File(chooser.getSelectedFile().getAbsolutePath());
+			try	{
+				//if(file.createNewFile()){
+					FileWriter writer = new FileWriter(file,false);
+					writer.write("#");
+					for(int i=0; i< v.size(); i++){
+						int x = ((Point)v.elementAt(i)).x;
+						int y = ((Point)v.elementAt(i)).y;
+						writer.write(x+",");
+						writer.write(y+",");
+						//System.out.print(x+",");
+						//System.out.print(y+",");
+					}
+					writer.write("\n$node_(0) set X_ 0");
+					writer.write("\n$node_(0) set Y_ 0");
+					writer.write("\n$node_(0) set Z_ 0");
+					writer.write("\n$ns_ at 0.000000000000 \"$flood_(0) position 0 0 0\"");
+					
+					
+					for(int i=0; i< v.size(); i++){
+						int x = ((Point)v.elementAt(i)).x;
+						int y = ((Point)v.elementAt(i)).y;
+
+						writer.write("\n$node_(" + (i+1) + ") set X_ " + x);
+						writer.write("\n$node_(" + (i+1) + ") set Y_ " + y);
+						writer.write("\n$node_(" + (i+1) + ") set Z_ 0");
+						writer.write("\n$ns_ at 0.000000000000 \"$flood_(" + (i+1) + ") position " + x + " " + y + " 0\"\n");
+						
+						//System.out.print(x+",");
+						//System.out.print(y+",");
+					}
+					writer.close();
+			}
+			catch(IOException ioe){
+				System.out.println("Erro ao criar arquivo de pontos");
+			}
+		}
+	}	
+	
+	//receive the amount of time a node spend do send its data over one hop
+	public void performDecremental(double datasize, double dronespeed, String fileoutput){
+		int numsensors = sensors.size();
+		int numdrones = dronepositions.size();
+		
+		SpanningTree m = new SpanningTree(radiorange, sensors, dronepositions,1);
+		int spanning_tree[][] = m.createSpanningTree();
+//		image.receiveSpanningTree(spanning_tree);	
+
+		Reduction r = new Reduction(numsensors,numdrones,intAdjacencyMatrix(),spanning_tree);
+		
+		double bestcost = Double.MAX_VALUE;
+		double custo = 0;
+		Reference bestresult = null;
+		Vector<Node> bestnodes = null;
+
+	//	image.repaint();
+	//	JOptionPane.showMessageDialog(null, "Antes");
+		for(int i=1; i<dronepositions.size(); i++){
+			int remove = r.bestElimination();
+			if(remove == -1)break;
+			r.eliminate(remove);
+			
+			//Custo
+			Vector<Node> rest = r.getPositions(dronepositions);
+			if(rest.size()<12){     //12 por causa do cacheiro viajante
+				Reference result = new Reference();
+				custo = Cost.totalCost(sensors, dronepositions,rest, dronespeed, datasize,result);
+				if(custo < bestcost){
+					bestcost=custo;
+					bestresult = result;
+					bestnodes = (Vector<Node>)rest.clone();
+				}
+				//String s="";
+				//for(int u=0;u<rest.size();u++)
+					//s=s+" "+rest.get(u).getNodeId();
+				//System.out.print("\ncusto:" + custo + "   -->"+s);
+			
+				if(custo != Principal.INFINITY){
+					Reference lc =  LocalSearch.search(sensors, dronepositions, rest, spanning_tree, custo, dronespeed, datasize,(int)precision);
+				    //System.out.print("\nLocal Search tenta: " + lc.cost + " "+ lc.tripdistance + " " + lc.numhops + " " + lc.bestanswer.size() + " -- ");
+				    //s="";
+				    //for(int u=0;u<lc.bestanswer.size();u++)
+					//		s=s+" "+lc.bestanswer.get(u).getNodeId();
+				    //System.out.print(s);
+					
+				    if(lc!=null && lc.cost<bestcost && custo!=Principal.INFINITY){
+						bestcost = lc.cost;
+						bestnodes = (Vector<Node>)lc.bestanswer.clone();
+						bestresult.bestanswer = (Vector<Node>)lc.bestanswer.clone();
+						bestresult.cost = lc.cost;
+						bestresult.numhops = lc.numhops;
+						bestresult.tripdistance = lc.tripdistance;
+						bestresult.tour = lc.tour.clone();
+					}
+	
+				}
+		}
+//			image.repaint();
+//			JOptionPane.showMessageDialog(null, i); 
+		}
+		bestanswer = bestnodes; 
+		
+		bestnodes.clear();
+		for(int i=0; i<bestresult.tour.length; i++)
+			bestnodes.add(dronepositions.get(bestresult.tour[i]));
+		
+		
+		showResult("Decremental", bestcost, bestresult, bestnodes);
+		
+	}
+	
+	public void performIncremental(double datasize, double dronespeed, String fileoutput){
+		MoreConnected t = new MoreConnected(adjacency, sensors.size(), dronepositions.size());
+		t.calculateWeights();
+		t.setPositions(dronepositions);  //Set the position for each node in the sorted vector
+		t.sort();
+		
+		double bestcost=Principal.INFINITY;
+		Vector<Node> bestnodes=null;
+		Reference bestresult=null;
+
+		Vector<Node>more = null;
+		int spanning_tree[][] = null;
+		
+		double lastcost = Principal.INFINITY;
+		
+		for(int n=1; n<13; n++){
+			more = t.manipulate(n);
+			
+			SpanningTree m = new SpanningTree(radiorange, sensors, more,1);
+			spanning_tree = m.createSpanningTree();
+
+			Reference result = new Reference();
+			double custo = Cost.totalCost(sensors, dronepositions,more, dronespeed, datasize,result);
+			if(custo<bestcost && custo!=Principal.INFINITY){
+				bestcost = custo;
+				bestnodes = (Vector<Node>)more.clone();
+				bestresult = result;
+			}
+			//String s="";
+			//for(int u=0;u<more.size();u++)
+			//	s=s+" "+more.get(u).getNodeId();
+			//System.out.print("\nPartial:      " + custo + " "+ result.tripdistance + " " + result.numhops + " " + n + " -->"+s);
+
+			custo:
+			if(custo != Principal.INFINITY){
+			//ATEN��O, OLHAR PARA ESSE 42 E MUDAR!!!!!
+				Reference lc =  LocalSearch.search(sensors, dronepositions, more, spanning_tree, custo, dronespeed, datasize,(int)precision);
+				if(lc != null){
+				    //System.out.print("\nLocal Search tenta: " + lc.cost + " "+ lc.tripdistance + " " + lc.numhops + " " + lc.bestanswer.size() + " -- ");
+				    //	for(int u=0;u<lc.bestanswer.size();u++)
+					//		s=s+" "+lc.bestanswer.get(u).getNodeId();
+					//	System.out.print(s);
+					
+					if(lc.cost<bestcost && lc.cost!=Principal.INFINITY){
+						bestcost = lc.cost;
+						bestnodes = (Vector<Node>)lc.bestanswer.clone();
+						bestresult = lc;
+					}
+				}
+			}
+
+			
+
+			//Finish faster
+			if(lastcost<custo)
+				break;
+			else
+				lastcost = custo;
+			
+
+			//image.receiveDronePosition(more);
+			//image.receiveSpanningTree(spanning_tree);
+			//JOptionPane.showMessageDialog(null, n);
+		}
+		//                        melhor custo         tempo da viagem                   hops                    
+		//String s = "\nIncremental "+bestcost + " "+ bestresult.tripdistance + " " + bestresult.numhops + " " + bestnodes.size() + " -- ";
+		//System.out.print(s);
+		
+		//for(int i=0; i<bestnodes.size();i++){
+		//	s+=" " + bestnodes.get(i).getNodeId();
+		//	System.out.print(" " + bestnodes.get(i).getNodeId());
+		//}
+		bestnodes.clear();
+		for(int i=0; i<bestresult.tour.length; i++)
+			bestnodes.add(dronepositions.get(bestresult.tour[i]));
+
+		showResult("Incremental", bestcost, bestresult, bestnodes);
+	}
+	
+	public void performBruteForce(double datasize, double dronespeed, String fileoutput){
+		BruteForce bf = new BruteForce(dronespeed, datasize, sensors, dronepositions);
+		bf.perform(5);
+	}
+		
+	//Calculate de spanning tree and its cost
+	public boolean performOneHop(double datasize, double dronespeed){
+		OneHop oh = new OneHop(datasize,dronespeed,adjacency, sensors, dronepositions);
+		//return oh.perform();
+		oh.performExact(datasize,dronespeed);
+		return true;
+	}
+	
+	//Consider only one drone position in the center of the monitored area
+	public void performCenter(double datasize, double dronespeed, boolean center){
+		Vector<Node> oneDronePosition = new Vector<Node>();
+		String s="";
+		if(center){  //One PDP in the center of the monitored area
+			oneDronePosition.add(new Node(0,width/2,height/2));
+			s="Center";
+		}
+		else{       //One PDP in the position 0,0
+			oneDronePosition.add(new Node(0,0,0));
+			s="Position00";
+		}
+		SpanningTree m = new SpanningTree(Principal.radiorange, sensors, oneDronePosition,1);
+		int spanning_tree[][] = m.createSpanningTree();
+
+		Reference result = new Reference();
+		double custo = Cost.totalCost(sensors, dronepositions,oneDronePosition, dronespeed, datasize,result);
+
+		if(custo!=Principal.INFINITY){
+			//s += " "+custo + " "+ result.tripdistance + " " + result.numhops + " " + oneDronePosition.size() + " -- ";
+			//System.out.println(s);
+			showResult(s, custo, result,oneDronePosition);
+		}
+		else{
+			System.out.print("\n"+s + " 0 0 0 1");
+		}
+		//image.receiveDronePosition(oneDronePosition);
+		//image.receiveSpanningTree(spanning_tree);
+	}
+
+	public boolean performLocalSearch(Vector<Node>bestanswer, double lastcost,double dronespeed, double datasize){
+		System.out.println("local search");
+		//image.receiveDronePosition(bestanswer);
+		SpanningTree m = new SpanningTree(radiorange, sensors, bestanswer,1);
+		int spanning_tree[][] = m.createSpanningTree();
+		
+		Reference lc =  LocalSearch.search(sensors, dronepositions, bestanswer, spanning_tree, lastcost, dronespeed, datasize,(int)precision);
+		if(lc!=null){
+			double newcusto = Cost.totalCost(sensors, dronepositions, lc.bestanswer, dronespeed, datasize, new Reference());
+			System.out.print("\nLocal Search: "+ newcusto+ " "+ lc.tripdistance + " " + lc.numhops + " " + lc.bestanswer.size()+ "  -- ");
+			for(int a=0; a<lc.bestanswer.size();a++)
+				System.out.print(lc.bestanswer.get(a).getNodeId()+" ");
+			return true;
+		}
+		return false;
+		
+		//image.receiveDronePosition(bestanswer);
+		//image.receiveSpanningTree(spanning_tree);
+		//JOptionPane.showMessageDialog(null, "antigo:"+lastcost+ "  novo:"+newcusto);
+	}
+	
+	//Save in arq the string that is in data
+	public void saveText(String data, String arq){
+		try{
+			FileWriter file = new FileWriter(arq,true);
+			PrintWriter writer = new PrintWriter(file);
+			
+			writer.printf(data);
+			file.close();
+		}
+		catch(IOException ioex){
+			
+		}
+	}
+
+	public static void showResult(String method, double bestcost, Reference bestresult, Vector<Node> bestnodes){
+		String s = "\n"+method+": "+bestcost + " "+ bestresult.tripdistance + " " + bestresult.numhops + " " + bestnodes.size() + " -- ";
+		System.out.print(s);
+		
+
+		for(int i=0; i<bestnodes.size();i++){
+			s+=" " + bestnodes.get(i).getNodeId();
+			System.out.print(" " + bestnodes.get(i).getNodeId());
+		}
+		System.out.print("            ");
+		for(int i=0; i<bestresult.tour.length; i++)
+			System.out.print(" "+bestresult.tour[i]);
+
+		SpanningTree m = new SpanningTree(radiorange, sensors, bestnodes,1);
+		int spanning_tree[][] = m.createSpanningTree();
+		
+//		System.out.print("\n");
+		
+//		m.show(spanning_tree);
+
+//		System.out.print("\n");
+		
+//		m.show();
+	
+		
+		image.receiveDronePosition(bestnodes);
+		image.receiveSpanningTree(spanning_tree);
+		//image.repaint();
+
+//		s+="\n";
+//		if(!fileoutput.equals("")){
+//			saveText(s, fileoutput);
+//		}
+
+		
+	
+	}
+}
+
